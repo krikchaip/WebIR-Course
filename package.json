@@ -1,0 +1,26 @@
+{
+  "name": "webir-krikchaip",
+  "private": true,
+  "version": "1.0.0",
+  "description": "01204453 Course From Kasetsart University",
+  "main": "index.js",
+  "dependencies": {
+    "crawler": "^1.0.5",
+    "ramda": "^0.24.1",
+    "ramda-fantasy": "^0.8.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/krikchaip/WebIR-Course.git"
+  },
+  "author": "Krikchai Pongtaveewould",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/krikchaip/WebIR-Course/issues"
+  },
+  "homepage": "https://github.com/krikchaip/WebIR-Course#readme"
+}
