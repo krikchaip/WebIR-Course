@@ -7,11 +7,14 @@
   "dependencies": {
     "crawler": "^1.0.5",
     "ramda": "^0.24.1",
-    "ramda-fantasy": "^0.8.0"
+    "ramda-fantasy": "^0.8.0",
+    "seenreq": "^0.1.11",
+    "url-parse": "^1.1.9"
   },
   "devDependencies": {},
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node index.js"
   },
   "repository": {
     "type": "git",
