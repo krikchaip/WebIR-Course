@@ -1,7 +1,6 @@
-// TODO: parent link logging
-//       เพื่อดูว่าจำเป็นต้องลบ link ที่เป็น qs หรือไม่
+// TODO: ทำ counter ไว้นับจำนวน request ที่ success
 // TODO: จัดการกับ URI.origin/robots.txt
-// TODO: ทำ counter ไว้นับจำนวน request
+// TODO: parent link logging
 
 // ##### dependencies #####
 
@@ -14,15 +13,15 @@ const Urlparse = require('url-parse')
 // ##### configurations #####
 
 const linkDb = new Seenreq()
-const crawler = new Crawler()
+const crawler = new Crawler({ retries: 0 })
 const seedUrl = 'http://www.ku.ac.th/web2012/'
 
 // ##### functions #####
 
 // TODO: compose logger หลายๆตัวรวมเป็นกลุ่มเดียว
-const tap2Log = (tag, what2Log = R.identity) => R.tap(x => (
+const tapLog = (tag, what = R.identity) => R.tap(x => (
   console.log('##### @', tag),
-  console.log(what2Log(x))
+  console.log(what(x))
 ))
 
 const isHtmlResponse = R.pathSatisfies(
@@ -67,25 +66,23 @@ const nextUrls = R.ifElse(
 
 // ##### application #####
 
-function callback(err, res, done) {
-  const nextRequests = R.pipe(
-    tap2Log('href', R.path([ 'request', 'uri', 'href' ])),
-    tap2Log('depth level', R.path([ 'options', 'depth' ])),
-    nextUrls,
-    tap2Log('to be put in queue'),
-    R.map(uri => ({
-      uri,
-      callback,
-      depth: res.options.depth + 1
-    }))
-  )(res)
+function foo(limit) {
 
-  // !! WARNING: SIDE CAUSES/EFFECTS !!
-  // non-blocking operation
-  crawler.queue(nextRequests)
-  done()
+  const nextRequests = R.pipe(
+    // tapLog('href', R.path(['request', 'uri', 'href'])),
+    nextUrls,
+    // tapLog('to be put in queue'),
+    R.map( uri => ({ uri, callback }) )
+  )
+
+  crawler.queue({ uri: seedUrl, callback })
+
+  function callback(err, res, done) {
+    if(limit-- > 0) crawler.queue(nextRequests(res)) // !! WARNING: SIDE CAUSES/EFFECTS !!
+    console.log(crawler.queueSize)
+    done()
+  }
+
 }
 
-// !! WARNING: SIDE CAUSES/EFFECTS !!
-// initialize with seed url
-crawler.queue({ uri: seedUrl, callback, depth: 0 })
+foo(10)
