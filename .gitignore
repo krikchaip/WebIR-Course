@@ -1,6 +1,8 @@
 node_modules/
 .vscode/
+html/
 
 **/.DS_Store
 **/package-lock.json
 **/output.txt
+**/robots_txt_list.txt

@@ -6,6 +6,7 @@
   "main": "index.js",
   "dependencies": {
     "crawler": "^1.0.5",
+    "fs-path": "0.0.23",
     "ramda": "^0.24.1",
     "ramda-fantasy": "^0.8.0",
     "seenreq": "^0.1.11",
@@ -14,7 +15,7 @@
   "devDependencies": {},
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node index.js"
+    "start": "node _index.js 10000"
   },
   "repository": {
     "type": "git",
