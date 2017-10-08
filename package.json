@@ -9,13 +9,12 @@
     "fs-path": "0.0.23",
     "ramda": "^0.24.1",
     "ramda-fantasy": "^0.8.0",
-    "seenreq": "^0.1.11",
-    "url-parse": "^1.1.9"
+    "seenreq": "^0.1.11"
   },
   "devDependencies": {},
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node _index.js 10000"
+    "start": "rm -rf html robots_txt_list && node _index"
   },
   "repository": {
     "type": "git",
