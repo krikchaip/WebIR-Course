@@ -1,12 +1,16 @@
 // ##### @ imperative version
 
-// TODO: [x] counter ไว้นับจำนวน request ที่ success
+// TODO: [x] counter ไว้นับจำนวน response ที่ success
 // TODO: [x] จะ download แค่ file ที่เป็น .htm/.html
 // TODO: [x] บันทึก hostname ที่มี robots.txt ลงไฟล์
+// TODO: [x] URL normalization - complete relative URL to absolute one
+// TODO: [x] add exclusion filename extensions
+// TODO: [x] download robot.txt ของ web ที่มีด้วยเพื่อจะได้ check ความถูกต้องได้
 
 // FIXME: [x] ไม่ request ไปหา url ที่ไม่ใช่ webpage
 // FIXME: [x] ถ้า remaining หมดแล้วต้องให้หยุดการทำงานเลยทันที
-// FIXME: [] บาง page สามารถ access ไปที่ /robots.txt ได้แต่ไม่ใช่ไฟล์มันจริงๆ
+// FIXME: [x] บาง page สามารถ access ไปที่ /robots.txt ได้แต่ไม่ใช่ตัวไฟล์ robots.txt จริงๆ
+// FIXME: [] ถ้าหาก filename จากการ split path ด้วย '/' ไม่ได้อยู่ที่ตัวสุดท้ายของ list หล่ะ?
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -14,24 +18,24 @@
 // const {  } = require('ramda-fantasy')
 const Crawler = require('crawler')
 const Seenreq = require('seenreq')
-const URLparse = require('url-parse')
 const FsPath = require('fs-path')
+const { URL } = require('url')
 
 const visitedURLdb = new Seenreq()
-const crawler = new Crawler({ retries: 0, timeout: 5000 })
+const crawler = new Crawler({ retries: 0, timeout: 10000 })
 const robotsTxtCrawler = new Crawler({
   retries: 0,
   timeout: 5000,
-  callback: onSuccessWillAppend
+  callback: onSuccessWillDownload
 })
 
 const seedURL = 'https://www.ku.ac.th/web2012'
-const limit = process.argv[2] || 100
+const limit = process.argv[2] || 10000
 
 ////////////////////////////////////////////////////////////////////////////////
 
 let remaining = limit
-let successRequests = 0
+let successResponses = 0
 let htmlFiles = 0
 
 let visitedHosts = {}
@@ -44,17 +48,21 @@ crawler.on('drain', function() {
   console.log(`\n\t##### !!! start crawling hosts whether it has 'robots.txt' or not\n`)
 
   // start another crawler which focus crawling on robots.txt
-  visitedHosts = Object.keys(visitedHosts).map(host => `https://${host}/robots.txt`)
+  visitedHosts = Object.keys(visitedHosts).map(host => ({
+    uri: `${host}/robots.txt`,
+    jQuery: false
+  }))
   robotsTxtCrawler.queue(visitedHosts)
 
   // summary section
   robotsTxtCrawler.on('drain', function () {
-    console.log(`\n\t##### !!! success requests : ${successRequests} from total of ${limit}`)
+    console.log(`\n\t##### !!! success requests : ${successResponses} from total of ${limit}`)
+    console.log(`\t##### !!! have different : ${visitedHosts.length} hostnames`)
     console.log(`\t##### !!! total htm/html files : ${htmlFiles}`)
     console.log(`\t##### !!! total hostnames that have the robots.txt file : ${robotsTxtList.length}`)
 
     FsPath.writeFile(
-      `./robots_txt_list.txt`,
+      `./robots_txt_list/summary/summary.txt`,
       robotsTxtList.join('\n'),
       err => { if(err) console.log(err) }
     )
@@ -67,51 +75,53 @@ function onResponse(err, res, done) {
   // array contains next request objects -> { uri, callback }
   let nextRequests = []
 
-  // current response's uri
-  let uri = URLparse(res.options.uri)
-  let path = uri.pathname ? uri.pathname : '/'
-  let filename = path.split('/').reverse()[0]
-  filename = /\.\w+$/.test(filename) ? filename : ''
+  // current response's url
+  let currentURL = new URL(res.options.uri)
+  let currentFilename = currentURL.pathname.split('/').reverse()[0]
+  currentFilename = /\.\w+$/.test(currentFilename) ? currentFilename : ''
 
-  // cached hostname (use later on checking 'robots.txt')
-  if(!visitedHosts[uri.hostname]) visitedHosts[uri.hostname] = true
+  // cached origin url (use later on checking 'robots.txt')
+  if(!visitedHosts[currentURL.origin]) visitedHosts[currentURL.origin] = true
 
   // process only text/html response type
-  if(!res['headers']) return done()
-  else if( /text\/html/.test(res['headers']['content-type']) ) {
+  if(!res.headers) return done()
+  else if( /text\/html/.test(res.headers['content-type']) ) {
     let { $ } = res
 
     // extract urls from 'a' tag with some *criterias*
     $('a').each(function(i, elem) {
-      let parsedHref = URLparse( $(this).attr('href') )
-      let parsedPath = parsedHref.pathname ? parsedHref.pathname : '/'
-      let parsedFilename = parsedPath.split('/').reverse()[0]
-      parsedFilename = /\.\w+$/.test(parsedFilename) ? parsedFilename : ''
+      let url
+      try { url = new URL($(this).attr('href'), currentURL) }
+      catch (err) { return false }
 
-      // sanitize querystring and hash string
-      parsedHref.set('query', '')
-      parsedHref.set('hash', '')
+      let filename = url.pathname.split('/').reverse()[0]
+      filename = /\.\w+$/.test(filename) ? filename : ''
+
+      // sanitize hash and querystring
+      url.hash = ''
+      url.search = ''
 
       // *criterias*
-      // - contains slashes
       // - http or https
       // - only KU domain
-      // - is a webpage
+      // - not listed in exclusion
       // - unvisited url
-      if(
-        parsedHref['slashes'] &&
-        /^http(s)?:/.test(parsedHref['protocol']) &&
-        /ku\.ac\.th$/.test(parsedHref['hostname']) &&
-        /^$|\.(php|htm|html)$/.test(parsedFilename) &&
-        !visitedURLdb.exists(parsedHref['href'])
-      ) { nextRequests.push({ uri: parsedHref['href'], callback: onResponse }) }
+      try {
+        if(
+          /^http(s)?:/.test(url.protocol) &&
+          /ku\.ac\.th$/.test(url.hostname) &&
+          !/\.(pdf|doc(x)?|jpg|rar|xls(x)?|png|ppt(x)?|zip|dotx|exe|rtf)$/i.test(filename) &&
+          !visitedURLdb.exists(url.href)
+        ) { nextRequests.push({ uri: url.href, callback: onResponse }) }
+      }
+      catch (err) { return false }
 
     })
 
     // download to html/.../filename
-    if (/\.(htm|html)$/.test(filename)) {
-      let hostPath = uri.hostname + path
-      FsPath.writeFile(`./html/${hostPath}`, res.body, function (err) {
+    if (/\.(htm|html)$/.test(currentFilename)) {
+      let path = './html/' + currentURL.hostname + currentURL.pathname
+      FsPath.writeFile(path, res.body, function (err) {
         if (err) return done(err)
         else htmlFiles++
       })
@@ -120,17 +130,17 @@ function onResponse(err, res, done) {
   }
 
   console.log('--------------------------------------------------------------------------------')
-  console.log('##### @ request number', successRequests + 1)
-  console.log('##### @ href', res.request.uri.href)
-  console.log('##### @ path', path)
-  console.log('##### @ file', filename)
+  console.log('##### @ response number', successResponses + 1)
+  console.log('##### @ href', currentURL.href)
+  console.log('##### @ path', currentURL.pathname)
+  console.log('##### @ file', currentFilename)
   // console.log('##### @ to be put in queue')
   // console.log(nextRequests.map(x => x.uri))
   // console.log('##### @ remaining', remaining)
-  console.log()
+  console.log('--------------------------------------------------------------------------------\n')
 
   // repeat until reached limit requests
-  successRequests++
+  successResponses++
   if(nextRequests.length <= remaining && nextRequests.length > 0) {
     remaining -= nextRequests.length
     crawler.queue(nextRequests)
@@ -140,19 +150,23 @@ function onResponse(err, res, done) {
 
 }
 
-function onSuccessWillAppend(err, res, done) {
-  let uri = URLparse(res.options.uri)
-  let hasOrNot = ''
+function onSuccessWillDownload(err, res, done) {
+  let url
+  try { url = new URL(res.options.uri) }
+  catch (err) { return done() }
+  // let url = new URL(res.options.uri)
+  let path = './robots_txt_list/' + url.hostname
 
-  // checking validity
-  if(res.statusCode === 200) {
-    hasOrNot = `has 'robots.txt' file!!!`
-    robotsTxtList.push(uri.hostname)
+  // checking availability and process only with 'text/plain' MIME type
+  if(res.statusCode === 200 && /text\/plain/.test(res.headers['content-type'])) {
+    console.log(`##### @ hostname ${url.hostname} has 'robots.txt' file!!!`)
+
+    robotsTxtList.push(url.hostname)
+
+    FsPath.writeFile(path, res.body, function(err) {
+      if(err) return done(err)
+    })
   }
-
-  console.log('--------------------------------------------------------------------------------')
-  console.log('##### @ hostname', uri.hostname, hasOrNot)
-  console.log()
 
   done()
 }
