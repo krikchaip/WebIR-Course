@@ -2,15 +2,13 @@
 
 // TODO: [x] counter ไว้นับจำนวน response ที่ success
 // TODO: [x] จะ download แค่ file ที่เป็น .htm/.html
-// TODO: [x] บันทึก hostname ที่มี robots.txt ลงไฟล์
-// TODO: [x] URL normalization - complete relative URL to absolute one
+// TODO: [x] บันทึก hostname ที่มี robots.txt & download
 // TODO: [x] add exclusion filename extensions
-// TODO: [x] download robot.txt ของ web ที่มีด้วยเพื่อจะได้ check ความถูกต้องได้
 
-// FIXME: [x] ไม่ request ไปหา url ที่ไม่ใช่ webpage
 // FIXME: [x] ถ้า remaining หมดแล้วต้องให้หยุดการทำงานเลยทันที
 // FIXME: [x] บาง page สามารถ access ไปที่ /robots.txt ได้แต่ไม่ใช่ตัวไฟล์ robots.txt จริงๆ
 // FIXME: [] ถ้าหาก filename จากการ split path ด้วย '/' ไม่ได้อยู่ที่ตัวสุดท้ายของ list หล่ะ?
+// FIXME: [] ไม่เอา Response ที่ต้อง download ไฟล์ลงเครื่อง
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -44,7 +42,7 @@ let robotsTxtList = []
 // start crawling with initialized url
 crawler.queue({ uri: seedURL, callback: onResponse })
 
-crawler.on('drain', function() {
+crawler.once('drain', function() {
   console.log(`\n\t##### !!! start crawling hosts whether it has 'robots.txt' or not\n`)
 
   // start another crawler which focus crawling on robots.txt
@@ -52,22 +50,22 @@ crawler.on('drain', function() {
     uri: `${host}/robots.txt`,
     jQuery: false
   }))
+
   robotsTxtCrawler.queue(visitedHosts)
+})
 
-  // summary section
-  robotsTxtCrawler.on('drain', function () {
-    console.log(`\n\t##### !!! success requests : ${successResponses} from total of ${limit}`)
-    console.log(`\t##### !!! have different : ${visitedHosts.length} hostnames`)
-    console.log(`\t##### !!! total htm/html files : ${htmlFiles}`)
-    console.log(`\t##### !!! total hostnames that have the robots.txt file : ${robotsTxtList.length}`)
+// summary section
+robotsTxtCrawler.once('drain', function () {
+  console.log(`\n\t##### !!! success requests : ${successResponses} from total of ${limit}`)
+  console.log(`\t##### !!! have different : ${visitedHosts.length} hostnames`)
+  console.log(`\t##### !!! total htm/html files : ${htmlFiles}`)
+  console.log(`\t##### !!! total hostnames that have the robots.txt file : ${robotsTxtList.length}`)
 
-    FsPath.writeFile(
-      `./robots_txt_list/summary/summary.txt`,
-      robotsTxtList.join('\n'),
-      err => { if(err) console.log(err) }
-    )
-
-  })
+  FsPath.writeFile(
+    `./robots_txt_list/summary/summary.txt`,
+    robotsTxtList.join('\n'),
+    err => { if(err) console.log(err) }
+  )
 
 })
 
@@ -133,10 +131,9 @@ function onResponse(err, res, done) {
   console.log('##### @ response number', successResponses + 1)
   console.log('##### @ href', currentURL.href)
   console.log('##### @ path', currentURL.pathname)
-  console.log('##### @ file', currentFilename)
+  // console.log('##### @ file', currentFilename)
   // console.log('##### @ to be put in queue')
   // console.log(nextRequests.map(x => x.uri))
-  // console.log('##### @ remaining', remaining)
   console.log('--------------------------------------------------------------------------------\n')
 
   // repeat until reached limit requests
@@ -154,7 +151,7 @@ function onSuccessWillDownload(err, res, done) {
   let url
   try { url = new URL(res.options.uri) }
   catch (err) { return done() }
-  // let url = new URL(res.options.uri)
+
   let path = './robots_txt_list/' + url.hostname
 
   // checking availability and process only with 'text/plain' MIME type
@@ -169,4 +166,5 @@ function onSuccessWillDownload(err, res, done) {
   }
 
   done()
+
 }

@@ -13,7 +13,7 @@
   },
   "devDependencies": {},
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "rm -rf html robots_txt_list && node _index > log",
     "start": "rm -rf html robots_txt_list && node _index"
   },
   "repository": {
