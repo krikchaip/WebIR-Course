@@ -7,6 +7,7 @@
 
 // FIXME: [x] ถ้า remaining หมดแล้วต้องให้หยุดการทำงานเลยทันที
 // FIXME: [x] บาง page สามารถ access ไปที่ /robots.txt ได้แต่ไม่ใช่ตัวไฟล์ robots.txt จริงๆ
+// FIXME: [x] กำจัด recursive listener/emitter โดยแยกออกจากกัน
 // FIXME: [] ถ้าหาก filename จากการ split path ด้วย '/' ไม่ได้อยู่ที่ตัวสุดท้ายของ list หล่ะ?
 // FIXME: [] ไม่เอา Response ที่ต้อง download ไฟล์ลงเครื่อง
 
