@@ -5,7 +5,7 @@
 // =============================================================================
 
 const R = require('ramda')
-const { Maybe, State } = require('ramda-fantasy')
+const { Maybe, IO, State } = require('ramda-fantasy')
 
 const Crawler = require('crawler')
 const Seenreq = require('seenreq')
@@ -36,25 +36,13 @@ const excludedExtensions = [
 // FIXME: [] ถ้าไม่มี response obj(error) หรือเป็น error-statuscode จะไม่นับ
 // =============================================================================
 
-// TODO: State monad application
+// Start WebCrawler application
+foo()
 
-// initialize queue with seed url
-// TODO: change callback's name to more meaningful...
-URLcrawler.queue({ uri: seedURL, callback: $on_response })
-
-// crawler's callback
-// TODO: ใช้ promise ส่งค่าจำเป็นที่ fetch ได้ออกไปข้างนอก
-// แล้วให้ข้างนอกเป็นคนทำหน้าที่ download / ตัดสินใจ crawl ในครั้งต่อไป
-function $on_response(err, res, done) {
-  const toRequestObj = R.map(href => ({ uri: href, callback: $on_response }))
-  const current = R.pipe( URLwithFilename, R.tap(isVisited) )
-    ( new URL(res.options.uri) ) // !! WARNING: SIDE CAUSES/EFFECTS !!
-  const nextRequests = R.pipe( parsableContent, extractURL(current), toRequestObj )
-    ( res )
-
-  return done()
+// TODO: ใช้ State monad เข้ามาช่วย
+async function foo() {
+  const { next, save } = await URLcrawl(seedURL)
 }
-
 
 // =============================================================================
 // ########## @ helper functions @ ##########
@@ -64,6 +52,39 @@ function $on_response(err, res, done) {
 // =============================================================================
 
 const isVisited = R.pathSatisfies( href => visitedURLdb.exists(href), ['inner', 'href'] )
+const saveContent = content => URLobj => IO(() => FsPath.writeFile(
+  `./html/${URLobj.inner.hostname}${URLobj.inner.pathname}`,
+  content,
+  R.when( R.isNil, err => console.log(err) )
+))
+
+function URLcrawl(seed) {
+  return new Promise(function (resolve, reject) {
+    // initialize queue with seed
+    URLcrawler.queue({ uri: seed, callback: _onResponse })
+
+    // URLcrawler's callback
+    // explanation: ใช้ promise ส่งค่าจำเป็นที่ fetch ได้ออกไปข้างนอก
+    // แล้วให้ข้างนอกเป็นคนทำหน้าที่ download / ตัดสินใจ crawl ในครั้งต่อไป
+    function _onResponse(err, res, done) {
+      const current = R.pipe( URLwithFilename, R.tap(isVisited) )
+        ( new URL(res.options.uri) ) // !! WARNING: SIDE CAUSES/EFFECTS !!
+      const nextRequests = R.pipe( parsableContent, extractURL(current) )
+        ( res )
+      const downloadHTMLcontent = R.ifElse(
+        R.propSatisfies( R.test(/\.htm(l)?$/), 'filename' ),
+        saveContent(res.body),
+        R.always( IO.of('content-type is not HTML') )
+      )( current )
+
+      // returning Promise results
+      resolve({ next: nextRequests, save: downloadHTMLcontent })
+
+      return done()
+    }
+
+  })
+}
 
 function URLwithFilename(URLobj) {
   const pathList = URLobj.pathname.split('/')
@@ -89,6 +110,7 @@ function extractURL(baseURL) {
   const likelyWebpage = R.complement( R.test(new RegExp(excExtsRegex, 'i')) )
   const haveNotSeen = R.complement(isVisited)
 
+  // เงื่อนไขที่จะเอา url มา crawl ใน state ต่อไป
   const passCriterias = R.allPass([ HTTPorHTTPs, onlyKUdomain, likelyWebpage, haveNotSeen ])
 
   function urlList($) {
