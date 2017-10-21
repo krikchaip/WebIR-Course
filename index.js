@@ -1,138 +1,105 @@
-// =============================================================================
-// ########## @ functional version @ ##########
-// TODO: [] packet-like logging with file/stdout forked
-// TODO: [] raw command line args (custom initial parameters)
-// =============================================================================
+// =================================================================================================
+// #################################### @ functional version @ #####################################
+// =================================================================================================
 
-const R = require('ramda')
-const { Maybe, IO, State } = require('ramda-fantasy')
+const _ = require('ramda')
+const __ = require('ramda-fantasy')
 
 const Crawler = require('crawler')
 const Seenreq = require('seenreq')
-const FsPath = require('fs-path')
+const Fspath = require('fs-path')
 const { URL } = require('url')
 
-const visitedURLdb = new Seenreq()
-const URLcrawler = new Crawler({ retries: 0, timeout: 10000 })
-// const robotsTxtCrawler = new Crawler({
-//   retries: 0,
-//   timeout: 5000,
-//   callback: onSuccessWillDownload // TODO: change to more meaningful name...
-// })
+// =================================================================================================
+// ##################################### @ helper functions @ ######################################
+// =================================================================================================
 
-// TODO: use process.argv (IO monad) with custom parameters
-// eg: node index --seed "..." --limit N
-const seedURL = 'https://www.ku.ac.th/web2012'
-const limit = 10000
-const excludedExtensions = [
-  '.pdf', '.doc', '.docx', '.jpg', '.rar',
-  '.xls', '.xlsx', '.png', '.ppt', '.pptx',
-  '.zip', '.dotx', '.exe', '.rtf',
-]
+const readerFuture = __.Reader.T(__.Future)
 
+const request = _.curry((uri, mutator, _state) => ({ uri, callback: mutator(_state) }))
 
-// =============================================================================
-// ########## @ start crawler here @ ##########
-// FIXME: [] ถ้าไม่มี response obj(error) หรือเป็น error-statuscode จะไม่นับ
-// =============================================================================
+const crawler = _.curry((lookfor, seed) => {
+  return readerFuture(({ instance }) => __.Future((reject, resolve) => {
+    let _state = { current: seed.slice(), next: [] }
+    let reqs = _.lift(request)(seed, [lookfor], [_state])
 
-// Start WebCrawler application
-foo()
+    try { instance.queue(reqs), instance.once('drain', () => resolve(_state)) }
+    catch (err) { reject(err) }
+  }))
+})
 
-// TODO: ใช้ State monad เข้ามาช่วย
-async function foo() {
-  const { next, save } = await URLcrawl(seedURL)
-}
-
-// =============================================================================
-// ########## @ helper functions @ ##########
-// *** เขียน main functions จำนวนเท่าที่เห็นใน app section
-// TODO: [] JSDoc over main functions
-// TODO: [] Hindley-Milner type signatures for all functions
-// =============================================================================
-
-const isVisited = R.pathSatisfies( href => visitedURLdb.exists(href), ['inner', 'href'] )
-const saveContent = content => URLobj => IO(() => FsPath.writeFile(
-  `./html/${URLobj.inner.hostname}${URLobj.inner.pathname}`,
-  content,
-  R.when( R.isNil, err => console.log(err) )
+const visited = _.curry((urls, { db }) => __.Future((reject, resolve) =>
+  db.exists(urls, (err, result) => err ? reject(err) : resolve([urls, result]))
 ))
 
-function URLcrawl(seed) {
-  return new Promise(function (resolve, reject) {
-    // initialize queue with seed
-    URLcrawler.queue({ uri: seed, callback: _onResponse })
+const pairFilter = (value, bool) => bool ? value : undefined
 
-    // URLcrawler's callback
-    // explanation: ใช้ promise ส่งค่าจำเป็นที่ fetch ได้ออกไปข้างนอก
-    // แล้วให้ข้างนอกเป็นคนทำหน้าที่ download / ตัดสินใจ crawl ในครั้งต่อไป
-    function _onResponse(err, res, done) {
-      const current = R.pipe( URLwithFilename, R.tap(isVisited) )
-        ( new URL(res.options.uri) ) // !! WARNING: SIDE CAUSES/EFFECTS !!
-      const nextRequests = R.pipe( parsableContent, extractURL(current) )
-        ( res )
-      const downloadHTMLcontent = R.ifElse(
-        R.propSatisfies( R.test(/\.htm(l)?$/), 'filename' ),
-        saveContent(res.body),
-        R.always( IO.of('content-type is not HTML') )
-      )( current )
+// TODO: refactor
+const dbCheck = ({ current, next }) => readerFuture(visited(current))
+  .chain(() => _.pipe(_.uniq, visited, readerFuture)(next))
+  .map(([urls, exists]) => _.zipWith(pairFilter, urls, exists.map(_.not)).filter(_.identity))
 
-      // returning Promise results
-      resolve({ next: nextRequests, save: downloadHTMLcontent })
-
-      return done()
-    }
-
-  })
+const ignoreErrParse = (url, base = _.identity) => {
+  try { return __.Maybe.Just(new URL(url, base(url))) }
+  catch (_) { return __.Maybe.Nothing() }
 }
 
-function URLwithFilename(URLobj) {
-  const pathList = URLobj.pathname.split('/')
-  const hasExtensions = R.test(/\.\w+$/)
-  const filenameExtractor = R.pipe( R.last, R.unless(hasExtensions, R.always('-')) )
-
-  return { inner: URLobj, filename: filenameExtractor(pathList) }
+const fileWithExtension = url => {
+  const filename = _.pipe(_.prop('pathname'), _.split('/'), _.last)
+  const extension = str => /\.\w+$/.test(str) ? __.Maybe.Just(str) : __.Maybe.Nothing()
+  return _.pipe(filename, extension)(url)
 }
 
-function parsableContent(resObj) {
-  const contentType = R.pipe( Maybe.toMaybe, R.map(R.path(['headers', 'content-type'])) )
-  const isHTMLtype = R.test(/text\/html/)
-  const jQuery = R.when( isHTMLtype, R.always(resObj.$) )
-
-  return Maybe.of(jQuery).ap(contentType(resObj))
+const fileExtensionsRegex = csv => {
+  const sanitize = _.replace(/[^,\w]/gm, '')
+  const comma2pipe = _.replace(/,/g, '|')
+  const extensionForm = str => `\\.(${str})$`
+  return _.pipe(_.toLower, sanitize, comma2pipe, extensionForm)(csv)
 }
 
-function extractURL(baseURL) {
-  const HTTPorHTTPs = R.pathSatisfies( R.test(/^http(s)?:/), ['inner', 'protocol'] )
-  const onlyKUdomain = R.pathSatisfies( R.test(/ku\.ac\.th$/), ['inner', 'hostname'] )
-  const excExtsRegex = R.pipe( R.map(x => `\\${x}$`), R.join('|') )
-    ( excludedExtensions )
-  const likelyWebpage = R.complement( R.test(new RegExp(excExtsRegex, 'i')) )
-  const haveNotSeen = R.complement(isVisited)
-
-  // เงื่อนไขที่จะเอา url มา crawl ใน state ต่อไป
-  const passCriterias = R.allPass([ HTTPorHTTPs, onlyKUdomain, likelyWebpage, haveNotSeen ])
-
-  function urlList($) {
-    let urls = []
+// TODO: refactor
+const URLs = conditions => _state => (err, res, done) => {
+  let base = ignoreErrParse(res.options.uri)
+  let urls = __.Maybe.toMaybe(res.$).map($ => {
+    let _results = []
 
     $('a').each(function (i, elem) {
-      const url = URLwithFilename( new URL($(this).attr('href'), baseURL.inner) )
+      let href = base
+        .chain(url => ignoreErrParse($(this).attr('href'), _.always(url)))
+        .map(url => (url.hash = '', url.search = '', url))
+        .getOrElse('')
 
-      // !! WARNING: SIDE CAUSES/EFFECTS !!
-      url.inner.hash = ''
-      url.inner.search = ''
-
-      // !! WARNING: SIDE CAUSES/EFFECTS !!
-      if (passCriterias(url)) {
-        urls.push(url.inner.href)
-      }
+      if (_.allPass(conditions)(href)) _results.push(href)
     })
 
-    return urls
-  }
+    return _results
+  })
 
-  return maybeJQuery => Maybe.of(urlList)
-    .ap(maybeJQuery)
-    .getOrElse([])
+  _state.next = _state.next.concat(urls.map(_.pluck('href')).getOrElse([]))
+
+  return done()
 }
+
+// =================================================================================================
+// =================================================================================================
+
+// TODO: pick from process.argv custom parameters (hint: use IO monad)
+// eg: node index --exclude "..."
+const excludedExtensions = 'pdf,doc,docx,jpg,rar,xls,xlsx,png,ppt,pptx,zip,dotx,exe,rtf'
+
+// checking whether url exists in db shouldn't present here.
+// (it should be checked everytime when the response has succeeded)
+const filterConditions = [
+  _.propSatisfies(_.test(/^http(s)?:/), 'protocol'), // is http/https protocol?
+  _.propSatisfies(_.test(/ku\.ac\.th$/), 'hostname'), // is KU domain?
+  _.pipe(fileExtensionsRegex, _.constructN(1, RegExp), _.test, _.complement) // not file shit?
+    (excludedExtensions)
+]
+
+const URLcrawler = crawler(URLs(filterConditions), ['https://www.ku.ac.th/web2012'])
+
+// !! WARNING: SIDE CAUSES/EFFECTS !!
+// start program
+URLcrawler.chain(dbCheck)
+  .run({ db: new Seenreq(), instance: new Crawler({ retries: 0, timeout: 5000 }) })
+  .fork(console.log, console.log)
