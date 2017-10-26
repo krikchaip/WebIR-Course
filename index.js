@@ -1,5 +1,6 @@
 // =================================================================================================
 // #################################### @ functional version @ #####################################
+// FIXME: doesn't actually check filename extensions
 // =================================================================================================
 
 const _ = require('ramda')
@@ -15,7 +16,7 @@ const { URL } = require('url')
 // ### Env :: { db: Seenreq, instance: Crawler }
 // ### Callback m :: Mutator (err res done) m
 // ### CrawlerResults :: { results: [String], success: Number }
-// ### CrawlerState :: { limit: Number, seed: [String], waiting: [String?] }
+// ### CrawlerState :: { limit: Number, seed: [String], waiting: [String] }
 // =================================================================================================
 
 // :: (r -> Future e a) -> ReaderT r Future e a
@@ -36,11 +37,13 @@ const crawler = _.curry((lookfor, targetURLs) => {
 })
 
 // :: [String] -> CrawlerResults -> CrawlerResults
-const without = _.curry((URLprops, cResults) => {
-  const toHref = _.pipe(_.map(_.prop('href')), _.invoker(1, 'getOrElse')(''))
-  const cleanProps = _.tap(URLobj => _.forEach(prop => URLobj[prop] = '', URLprops))
-  const withoutProps = _.pipe(_.unary(ignoreErrParse), _.map(cleanProps), toHref)
-  return _.over(_.lensProp('results'), _.map(withoutProps), cResults)
+const without = _.curry((URLprops, cr) => {
+  const cleaner = str => ignoreErrParse(str)
+    .map(_.tap(url => URLprops.forEach(prop => url[prop] = '')))
+    .map(_.prop('href'))
+    .getOrElse('')
+
+  return Object.assign(cr, { results: cr.results.map(cleaner) })
 })
 
 // :: [a] -> [Boolean] -> [a]
@@ -68,37 +71,45 @@ const dbCheck = urls => readerFuture(({ db }) => {
 })
 
 // :: CrawlerState -> CrawlerState
-const trimSeed = cs => {
-  let excess = cs.seed.length - cs.limit
-  return excess > 0 ? {
-    limit: cs.limit,
-    seed: _.dropLast(excess, cs.seed),
-    waiting: _.takeLast(excess, cs.seed)
-  } : cs
+const trimOrDump = cs => {
+  let { limit, seed, waiting } = cs
+  let excess = seed.length - limit
+  return excess > 0 ?
+    { limit, seed: _.dropLast(excess, seed), waiting: waiting.concat(_.takeLast(excess, seed)) } :
+    { limit, seed: seed.concat(_.take(-excess, waiting)), waiting: _.drop(-excess, waiting) }
 }
 
 // :: Number -> CrawlerState -> CrawlerState
 const limitSub = _.curry((success, cs) =>
-  _.over(_.lensProp('limit'), limit => limit - success, cs))
+  Object.assign(cs, { limit: cs.limit - success }))
 
-const recCrawl = crawler => {
-  const m_trimSeed = _.map(trimSeed)
-  const m_seedDbCheck = _.chain(_.pipe(_.prop('seed'), dbCheck))
-  const m_clean = _.map(without(['hash', 'search']))
-  const m_cleanResults = _.pipe(m_seedDbCheck, _.chain(_.pipe(crawler, m_clean)))
-  const m_limitSub = _.pipe(_.map(_.pipe(_.prop('success'), limitSub)), _.invoker(1, 'ap'))
+// :: [String] -> CrawlerState -> CrawlerState
+const enqueue = _.curry((r, cs) =>
+  Object.assign(cs, { seed: [], waiting: _.concat(cs.waiting, r) }))
 
-  // TODO: [] เอาอันใหม่ที่ได้ไป filter กับ db
-  // TODO: [] เอาผลลัพธ์ที่ filter แล้วไปใส่ใน waiting
-  // TODO: [] เท url จาก waiting เข้ามาใน seed ให้หมด
-  // TODO: [] loop ต่อถ้า limit > 0 else return
-  const rec = () => __.State.get
-    .chain(() => __.State.modify(m_trimSeed))
-    .chain(() => __.State.gets(m_cleanResults))
-    .chain(m_cr => __.State.modify(m_limitSub(m_cr)))
-
-  return __.State.modify(readerFuture.of).chain(rec)
+// :: CrawlerState -> ()
+const stateLogger = s => {
+  console.log('remaining', s.limit)
 }
+
+// :: ([String] -> CrawlerResultsM) -> CrawlerState -> CrawlerStateM
+// CrawlerResultsM = ReaderT Env Future (Error CrawlerResults)
+// CrawlerStateM = ReaderT Env Future (Error CrawlerStateM)
+const recCrawl = _.curry((crawler, initState) => {
+  const getResults = _.pipe(_.prop('seed'), crawler)
+  const sanitize = without(['hash', 'search'])
+  const rec = stateM => {
+    let fitLimit = _.map(trimOrDump, stateM)
+    let cleanResults = _.chain(_.pipe(getResults, _.map(sanitize)), fitLimit)
+    let nextSeed = _.chain(_.pipe(_.prop('results'), dbCheck), cleanResults)
+    let nextLimit = _.lift(limitSub)(_.map(_.prop('success'), cleanResults), fitLimit)
+    let nextState = _.lift(enqueue)(nextSeed, nextLimit)
+
+    return nextState.map(_.tap(stateLogger)).chain(ns => ns.limit > 0 ?
+      rec(readerFuture.of(ns)) : readerFuture.of(ns))
+  }
+  return rec(readerFuture.of(initState))
+})
 
 // :: String -> (a -> URL|String)? -> Maybe URL
 const ignoreErrParse = (url, base = _.identity) => {
@@ -131,17 +142,25 @@ const isSuccessful = res => {
 
 // :: [Predicate] => Callback CrawlerResults
 const URLs = conditions => mutable => (err, res, done) => {
-  isSuccessful(res).chain(success =>
-  __.Maybe.toMaybe(res.$).chain($ =>
-    ignoreErrParse(res.options.uri).chain(base => {
-      mutable.success = success ? mutable.success + 1 : mutable.success
-      $('a').each(function (i, elem) {
-        let href = ignoreErrParse($(this).attr('href'), _.always(base)).getOrElse('')
-        if (_.allPass(conditions)(href))
-          mutable.results.push(href.href)
-      })
+  let success = isSuccessful(res)
+  let jQuery = __.Maybe.toMaybe(res.$)
+  let base = ignoreErrParse(res.options.uri)
+  let extract = ($, b) => {
+    let results = []
+    let op = $('a').each(function (i, elem) {
+      let href = $(this).attr('href')
+      let url = ignoreErrParse(href, _.always(b)).getOrElse('')
+
+      if(_.allPass(conditions)(url))
+        results.push(url.href)
     })
-  ))
+
+    return results
+  }
+
+  mutable.success += success.getOrElse(false)
+  mutable.results = mutable.results
+    .concat(_.lift(extract)(jQuery, base).getOrElse([]))
 
   return done()
 }
@@ -158,7 +177,7 @@ const excludedExtensions = 'pdf,doc,docx,jpg,rar,xls,xlsx,png,ppt,pptx,zip,dotx,
 const filterConditions = [
   _.propSatisfies(_.test(/^http(s)?:/), 'protocol'), // is http/https protocol?
   _.propSatisfies(_.test(/ku\.ac\.th$/), 'hostname'), // is KU domain?
-  _.pipe(fileExtensionsRegex, _.constructN(1, RegExp), _.test, _.complement)
+  _.pipe(fileExtensionsRegex, _.constructN(1, RegExp), _.test, _.complement
     (excludedExtensions) // not file shit?
 ]
 
@@ -167,12 +186,11 @@ const webSpider = recCrawl(URLcrawler)
 
 // !! WARNING: SIDE CAUSES/EFFECTS !!
 // start program
-// URLcrawler(['http://www.ku.ac.th/web2012'])
-//   .map(without(['hash', 'search']))
-//   .run({ db: new Seenreq(), instance: new Crawler({ retries: 0, timeout: 10000 }) })
-//   .fork(console.log, console.log)
-webSpider
-  // .eval({ limit: 100, seed: ['http://www.ku.ac.th/web2012'], waiting: [] })
-  .eval({ limit: 1, seed: ['https://www.cpe.ku.ac.th', 'https://ecourse.cpe.ku.ac.th'], waiting: [] })
+// webSpider({ limit: 10, seed: ['https://ecourse.cpe.ku.ac.th', 'https://www.cpe.ku.ac.th'], waiting: [] })
+// webSpider({ limit: 1, seed: ['http://www.ku.ac.th/web2012', 'https://ecourse.cpe.ku.ac.th'], waiting: [] })
+webSpider({ limit: 100, seed: ['https://www.ku.ac.th/web2012'], waiting: [] })
   .run({ db: new Seenreq(), instance: new Crawler({ retries: 0, timeout: 10000 }) })
-  .fork(console.log, console.log)
+  .fork(console.log, value => {
+    console.log('\nfinal state')
+    console.log(value)
+  })
