@@ -177,7 +177,7 @@ const excludedExtensions = 'pdf,doc,docx,jpg,rar,xls,xlsx,png,ppt,pptx,zip,dotx,
 const filterConditions = [
   _.propSatisfies(_.test(/^http(s)?:/), 'protocol'), // is http/https protocol?
   _.propSatisfies(_.test(/ku\.ac\.th$/), 'hostname'), // is KU domain?
-  _.pipe(fileExtensionsRegex, _.constructN(1, RegExp), _.test, _.complement
+  _.pipe(fileExtensionsRegex, _.constructN(1, RegExp), _.test, _.complement)
     (excludedExtensions) // not file shit?
 ]
 
