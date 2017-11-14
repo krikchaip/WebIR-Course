@@ -5,72 +5,96 @@ const { Maybe,
         fromNullable,
         Future,
         isFuture,
-        URL } = require('../dependencies')
+        URL,
+        Seenreq } = require('../dependencies')
 
-// TODO:
-const forkV = R.curry((fst, snd, join, shared) =>
-	join
-		? Future.both(
-			isFuture(fst) ? fst.map(f => f(shared)) : Future.of(fst(shared)),
-			isFuture(snd) ? snd.map(s => s(shared)) : Future.of(snd(shared)))
-		: Future((e, r) =>
-			))
+const duplicateEliminator = urls =>
+  R.map(R.prop('href'), urls)
+  .map(R.tap(console.log))
+
+const rejectNotification = cause => e =>
+  console.error(`"${cause}" has run with error: ${e}`)
+
+const resolveNotification = cause => r =>
+  console.log(`"${cause}" has successfully run with discarded result "${r}"`)
+
+const executeF = R.curry((f, x) =>
+  isFuture(f) ? f.map(g => g(x)) : Future.encase(f, x))
+
+const forkVirtual = R.curry((fst, snd, join, shared) =>
+  join
+    ? Future.both(executeF(fst, shared), executeF(snd, shared))
+    : Future((reject, resolve) => {
+        executeF(fst, shared).fork(reject, r => resolve([r]))
+        executeF(snd, shared).fork(
+          rejectNotification('second function'),
+          resolveNotification('second function'))
+      }))
 
 const currentDirectoryNotHTML = cause => () =>
-	console.error(`"${cause}": is not directly HTML, download terminated.`)
+  console.error(`"${cause}": is not directly HTML, download terminated`)
 
 const filename = R.pipe(
-	R.split('/'),
-	R.last,
-	R.ifElse(R.test(/\.\w+$/), Just, Nothing))
+  R.split('/'),
+  R.last,
+  R.ifElse(R.test(/\.\w+$/), Just, Nothing))
 
 const HTMLpath = raw =>
-	Maybe.of(new URL(raw))
-	.chain(u =>
-		filename(u.pathname)
-		.chain(
-			R.ifElse(R.test(/\.(htm|html)$/),
-			R.always(Just(u)),
-			Nothing)))
+  Maybe.of(new URL(raw))
+  .chain(u =>
+    filename(u.pathname)
+    .chain(
+      R.ifElse(R.test(/\.(htm|html)$/),
+      R.always(Just(u)),
+      Nothing)))
 
 const contentFilter = R.curry((storage, { content: { html, uri } }) =>
-	HTMLpath(uri)
-	.map(u =>
-		() => storage(({ dir: `./html/${u.hostname}${u.pathname}`, html })))
-	.getOrElse(currentDirectoryNotHTML(uri))())
+  HTMLpath(uri)
+  .map(u =>
+    () => storage(({ dir: `./html/${u.hostname}${u.pathname}`, html })))
+  .getOrElse(currentDirectoryNotHTML(uri))())
+
+// test
+// contentFilter(
+//   require('../storage'),
+//   { content: { html: `<html></html>`,
+//                uri: `https://www.google.com/a.html` } })
 
 const URLfilter = ({ urls }) =>
-	R.filter(
-		R.allPass([
-			R.propSatisfies(R.test(/^http(s)?:/), 'protocol'), // is http/https protocol?
-			R.propSatisfies(R.test(/ku\.ac\.th$/), 'hostname'), // is KU domain?
-		]),
-		urls)
+  R.filter(
+    R.allPass([
+      R.propSatisfies(R.test(/^http(s)?:/), 'protocol'), // is http/https protocol?
+      R.propSatisfies(R.test(/ku\.ac\.th$/), 'hostname'), // is KU domain?
+    ]),
+    urls)
 
 const maybeCatch = R.tryCatch(fn => Just(fn()), e => Nothing())
 
 const normalize = (raw, base = undefined) =>
-	base ? maybeCatch(() => new URL(raw, base))
-			 : maybeCatch(() => new URL(raw))
+  base ? maybeCatch(() => new URL(raw, base))
+       : maybeCatch(() => new URL(raw))
 
 const URLextract = R.curry(($, base) =>
-	R.tap(urls =>
-		$('a').each(function () {
-			normalize($(this).attr('href'), base)
-			.map(R.tap(url => (url['hash'] = '', url['search'] = '', url)))
-			.map(R.tap(url => urls.push(url)))
-		}), []))
+  R.tap(urls =>
+    $('a').each(function () {
+      normalize($(this).attr('href'), base)
+      .map(R.tap(url => (url['hash'] = '', url['search'] = '', url)))
+      .map(R.tap(url => urls.push(url)))
+    }), []))
 
 const parser = res =>
-	fromNullable(res.$)
-	.map($ => ({
-		content: { html: $.html(), uri: res.options.uri },
-		urls: URLextract($, res.options.uri)
-	}))
+  fromNullable(res.$)
+  .map($ => ({
+    content: { html: $.html(), uri: res.options.uri },
+    urls: URLextract($, res.options.uri)
+  }))
 
 module.exports = R.curry((scheduler, storage, res) =>
-	parser(res)
-		.map(shared =>
-			forkV(URLfilter, contentFilter(storage), false, shared)
-			.fork(console.error, console.log)))
-			// ))
+  parser(res)
+    .map(forkVirtual(URLfilter, contentFilter(storage), false))
+    .map(
+      Future.fork(
+        console.error,
+        ([ urls ]) =>
+          duplicateEliminator(urls)
+          )))
