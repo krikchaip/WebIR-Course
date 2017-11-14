@@ -1,4 +1,4 @@
-const { Crawler } = require('./dependencies')
+const { Crawler, Seenreq } = require('./dependencies')
 
 const analyzer = require('./analyzer')
 const downloader = require('./downloader')
@@ -14,7 +14,9 @@ const instance = new Crawler({
   forceUTF8: true // true
 })
 
-const crawler = downloader(analyzer(scheduler, storage), instance)
+const db = new Seenreq()
+
+const crawler = downloader(analyzer(scheduler, storage, db), instance)
 
 // Run
 // crawler(['https://www.ku.ac.th/web2012'])

@@ -5,12 +5,23 @@ const { Maybe,
         fromNullable,
         Future,
         isFuture,
-        URL,
-        Seenreq } = require('../dependencies')
+        URL } = require('../dependencies')
 
-const duplicateEliminator = urls =>
-  R.map(R.prop('href'), urls)
-  .map(R.tap(console.log))
+const pairFilter = R.curry(R.pipe(R.zip, R.filter(([x, b]) => !!b), R.map(R.head)))
+
+// // test
+// console.log(pairFilter(['a', 'b', 'c'], [true, false, true]))
+// console.log(pairFilter(['a', 'b', 'c'])([true, false, true]))
+
+const uniqHrefs = R.pipe(R.map(R.prop('href')), R.uniq)
+
+const duplicateEliminator = R.curry((db, current, urls) =>
+  Future.encaseN(db.exists.bind(db))(current)
+  .chain(() =>
+    Future.of(uniqHrefs(urls))
+    .chain(raw =>
+      Future.encaseN(db.exists.bind(db))(raw)
+      .map(xs => pairFilter(raw, xs.map(R.not))))))
 
 const rejectNotification = cause => e =>
   console.error(`"${cause}" has run with error: ${e}`)
@@ -54,7 +65,7 @@ const contentFilter = R.curry((storage, { content: { html, uri } }) =>
     () => storage(({ dir: `./html/${u.hostname}${u.pathname}`, html })))
   .getOrElse(currentDirectoryNotHTML(uri))())
 
-// test
+// // test
 // contentFilter(
 //   require('../storage'),
 //   { content: { html: `<html></html>`,
@@ -89,12 +100,12 @@ const parser = res =>
     urls: URLextract($, res.options.uri)
   }))
 
-module.exports = R.curry((scheduler, storage, res) =>
+module.exports = R.curry((scheduler, storage, db, res) =>
   parser(res)
     .map(forkVirtual(URLfilter, contentFilter(storage), false))
     .map(
       Future.fork(
         console.error,
-        ([ urls ]) =>
-          duplicateEliminator(urls)
-          )))
+        ([urls]) =>
+          duplicateEliminator(db, res.options.uri, urls)
+          .fork(console.error, scheduler))))
