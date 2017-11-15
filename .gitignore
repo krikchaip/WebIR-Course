@@ -1,5 +1,8 @@
 node_modules/
 .vscode/
+html/
+robots_txt_list/
 
 **/.DS_Store
 **/package-lock.json
+**/log
