@@ -7,18 +7,24 @@ const { Maybe,
         isFuture,
         URL } = require('../dependencies')
 
-const pairFilter = R.curry(R.pipe(R.zip, R.filter(([x, b]) => !!b), R.map(R.head)))
+const sequenceF = R.curry((ignoreErr, xs) => {
+  const ys = []
+  try { xs.forEach(x =>
+        x.fork(
+          e => { if(!ignoreErr) throw e },
+          r => ys.push(r))) }
+  catch(e) { return Future.of([]) }
+  return Future.of(ys)
+})
 
-// // test
-// console.log(pairFilter(['a', 'b', 'c'], [true, false, true]))
-// console.log(pairFilter(['a', 'b', 'c'])([true, false, true]))
+const pairFilter = R.curry(R.pipe(R.zip, R.filter(([x, b]) => !!b), R.map(R.head)))
 
 const uniqHrefs = R.pipe(R.map(R.prop('href')), R.uniq)
 
-const duplicateEliminator = R.curry((db, current, urls) =>
+const duplicateEliminator = R.curry((db, current, URLs) =>
   Future.encaseN(db.exists.bind(db))(current)
   .chain(() =>
-    Future.of(uniqHrefs(urls))
+    Future.of(uniqHrefs(URLs))
     .chain(raw =>
       Future.encaseN(db.exists.bind(db))(raw)
       .map(xs => pairFilter(raw, xs.map(R.not))))))
@@ -26,8 +32,7 @@ const duplicateEliminator = R.curry((db, current, urls) =>
 const rejectNotification = cause => e =>
   console.error(`"${cause}" has run with error: ${e}`)
 
-const resolveNotification = cause => r =>
-  console.log(`"${cause}" has successfully run with discarded result "${r}"`)
+const noop = () => {}
 
 const executeF = R.curry((f, x) =>
   isFuture(f) ? f.map(g => g(x)) : Future.encase(f, x))
@@ -36,14 +41,12 @@ const forkVirtual = R.curry((fst, snd, join, shared) =>
   join
     ? Future.both(executeF(fst, shared), executeF(snd, shared))
     : Future((reject, resolve) => {
-        executeF(fst, shared).fork(reject, r => resolve([r]))
-        executeF(snd, shared).fork(
+        const fstCancel = executeF(fst, shared).fork(reject, r => resolve([r]))
+        const sndCancel = executeF(snd, shared).fork(
           rejectNotification('second function'),
-          resolveNotification('second function'))
+          noop)
+        return R.pipe(fstCancel, sndCancel)
       }))
-
-const currentDirectoryNotHTML = cause => () =>
-  console.error(`"${cause}": is not directly HTML, download terminated`)
 
 const filename = R.pipe(
   R.split('/'),
@@ -61,23 +64,18 @@ const HTMLpath = raw =>
 
 const contentFilter = R.curry((storage, { content: { html, uri } }) =>
   HTMLpath(uri)
-  .map(u =>
-    () => storage(({ dir: `./html/${u.hostname}${u.pathname}`, html })))
-  .getOrElse(currentDirectoryNotHTML(uri))())
+  .map(u => () =>
+    storage(({ dir: `./html/${u.hostname}${u.pathname}`, html }))
+    .fork(console.error, () => console.log(`${uri} written`)))
+  .getOrElse(noop)())
 
-// // test
-// contentFilter(
-//   require('../storage'),
-//   { content: { html: `<html></html>`,
-//                uri: `https://www.google.com/a.html` } })
-
-const URLfilter = ({ urls }) =>
+const URLfilter = ({ URLs }) =>
   R.filter(
     R.allPass([
       R.propSatisfies(R.test(/^http(s)?:/), 'protocol'), // is http/https protocol?
       R.propSatisfies(R.test(/ku\.ac\.th$/), 'hostname'), // is KU domain?
     ]),
-    urls)
+    URLs)
 
 const maybeCatch = R.tryCatch(fn => Just(fn()), e => Nothing())
 
@@ -86,26 +84,34 @@ const normalize = (raw, base = undefined) =>
        : maybeCatch(() => new URL(raw))
 
 const URLextract = R.curry(($, base) =>
-  R.tap(urls =>
+  R.tap(URLs =>
     $('a').each(function () {
       normalize($(this).attr('href'), base)
       .map(R.tap(url => (url['hash'] = '', url['search'] = '', url)))
-      .map(R.tap(url => urls.push(url)))
+      .map(R.tap(url => URLs.push(url)))
     }), []))
+
+const parserError = cause => () =>
+  console.error(`Unable to parse HTML document from "${cause}`)
 
 const parser = res =>
   fromNullable(res.$)
-  .map($ => ({
+  .map($ => () => ({
     content: { html: $.html(), uri: res.options.uri },
-    urls: URLextract($, res.options.uri)
+    URLs: URLextract($, res.options.uri)
   }))
+  .getOrElse(parserError(res.options.uri))
 
-module.exports = R.curry((scheduler, storage, db, res) =>
-  parser(res)
-    .map(forkVirtual(URLfilter, contentFilter(storage), false))
-    .map(
-      Future.fork(
-        console.error,
-        ([urls]) =>
-          duplicateEliminator(db, res.options.uri, urls)
-          .fork(console.error, scheduler))))
+module.exports = R.curry((scheduler, storage, db, state, pages) =>
+  R.pipe(
+    R.map(parser),
+    R.map(R.call),
+    R.filter(R.identity),
+    R.map(obj =>
+      forkVirtual(URLfilter, contentFilter(storage), false, obj)
+      .map(R.flatten)
+      .chain(duplicateEliminator(db, obj.content.uri))), // [Future e URLs]
+    sequenceF(true)
+  )(pages)
+  .fork(console.error,
+        URLs => scheduler(state, R.flatten(URLs)))) // [Cancel]

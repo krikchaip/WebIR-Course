@@ -1,23 +1,41 @@
 const R = require('ramda')
-const { IO, Nothing, Just, fromNullable } = require('../dependencies')
+const { Identity,
+        Future,
+        Nothing,
+        Just,
+        fromNullable } = require('../dependencies')
 
-const statusCodeNot2xx = (cause, detail) => () =>
-  console.error(`"${cause}": (${detail}), status code failed`)
+const limitSub = R.curry((n, s) =>
+  R.over(R.lensProp('limit'), l => l - n, s))
 
-const onsuccess = R.curry((cb, res) =>
+const statusCode2xx = R.filter(res =>
   fromNullable(res.statusCode)
   .map(R.test(/^2\d\d$/))
-  .chain(s => s ? Just(() => cb(res)) : Nothing())
-  .getOrElse(statusCodeNot2xx(res.options.uri, res.statusCode))())
+  .getOrElse(false))
 
-const addCb = R.curry((fn, opt) =>
-  opt.callback = (err, res, done) =>
-    (err ? console.error(err)
-         : onsuccess(fn, res)
-    , done()))
+const serialize = R.curry((target, opt) =>
+  opt.callback = (err, res, done) => {
+    // err ? console.error(err) : target.push(res)
+    err || target.push(res)
+    done()
+  })
 
-const listen = R.curry((ev, fn, inst) => IO(() => inst.on(ev, fn)))
-
-module.exports = R.curry((analyzer, instance, URLs) =>
-  listen('schedule', addCb(analyzer), instance)
-  .chain(() => IO(() => instance.queue(URLs))))
+module.exports = R.curry((analyzer, instance, state, URLs) =>
+  Future.of([])
+  .chain(shared =>
+    Future((reject, resolve) =>
+      // (Identity(URLs)
+      // .map(R.tap(URLs =>
+      //   console.log(`@downloader URLs: ${JSON.stringify(URLs, undefined, 2)}\n`))),
+      (Identity(instance)
+      .map(() => instance.on('schedule', serialize(shared)))
+      .map(() =>
+        instance.once('drain', () =>
+          (instance.removeAllListeners('schedule'),
+          resolve(shared))))
+      .map(() => instance.queue(URLs)),
+      () => console.error(`error: cancelation not implemented`))
+    ))
+  .map(statusCode2xx)
+  .fork(console.error, ps =>
+    analyzer(limitSub(ps.length, state), ps)))

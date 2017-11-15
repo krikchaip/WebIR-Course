@@ -6,14 +6,13 @@ const FsPath = require('fs-path')
 const Url = require('url')
 
 // =================================================================================================
-const { Identity, IO, Maybe } = Rf
+const { Identity, Maybe } = Rf
 const { Nothing, Just, toMaybe: fromNullable } = Maybe
 const { isFuture } = Future
 
 // =================================================================================================
 module.exports = {
   Identity,
-  IO,
   Maybe,
     Nothing,
     Just,
