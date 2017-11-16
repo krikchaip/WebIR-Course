@@ -1,22 +1,18 @@
 // TODO: [] excludes other filename extensions than HTML
 // TODO: [] log each loaded page(do it like you did on scheduler)
+// TODO: [] no (, , ...) statements!!
 // TODO: [] no CPS functions!!
 // TODO: [] use Either monad instead of Maybe
 // TODO: [] one big refactor
 // TODO: [] write steps for each function above
 // FIXME: [] overwhelming memory usage(see log file for more information)
 
-const R = require('ramda')
-const { Crawler, Seenreq } = require('./dependencies')
-
-const analyzer = require('./analyzer')
-const downloader = require('./downloader')
-const scheduler = require('./scheduler')
-const storage = require('./storage')
+const _ = require('ramda')
+const { fold, Future, Crawler, Seenreq } = require('./dependencies')
 
 // Setup
-const initState = { limit: 10000, waiting: [] }
-const seed = ['https://www.ku.ac.th/web2012']
+const initState = { limit: 10, waiting: [] }
+const db = new Seenreq()
 const instance = new Crawler({
   timeout: 5000, // 5000
   maxConnections: 10, // 10
@@ -25,19 +21,17 @@ const instance = new Crawler({
   jQuery: 'cheerio', // 'cheerio'
   forceUTF8: true // true
 })
-const db = new Seenreq()
 
-const crawler = R.curry((state, result) =>
-  scheduler(
-    downloader(
-      analyzer(
-        crawler,
-        storage,
-        db
-        ),
-      instance),
-    state,
-    result))
+// const analyzer = require('./analyzer')
+const downloader = require('./downloader')(instance)
+const scheduler = require('./scheduler')
+// const storage = require('./storage')
+
+const crawler = seed =>
+  scheduler(seed)
+  .chain(downloader)
 
 // Run
-crawler(initState, seed)
+crawler(['https://ecourse.cpe.ku.ac.th'])
+  .eval(Future.of(initState))
+  .value(_.forEach(res => console.log(res.body)))

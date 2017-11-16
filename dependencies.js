@@ -6,21 +6,20 @@ const FsPath = require('fs-path')
 const Url = require('url')
 
 // =================================================================================================
-const { Identity, Maybe } = Rf
-const { Nothing, Just, toMaybe: fromNullable } = Maybe
-const { isFuture } = Future
+const { Either, State } = Rf
+const { Left, Right, either: fold } = Either
+const { URL } = Url
 
 // =================================================================================================
 module.exports = {
-  Identity,
-  Maybe,
-    Nothing,
-    Just,
-    fromNullable,
+  Either,
+    Left,
+    Right,
+    fold,
+  State,
   Future,
-    isFuture,
   Crawler,
   Seenreq,
   FsPath,
-  URL: Url.URL,
+  URL,
 }
