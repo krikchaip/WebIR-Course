@@ -6,12 +6,13 @@ const FsPath = require('fs-path')
 const Url = require('url')
 
 // =================================================================================================
-const { Either, State } = Rf
+const { Identity, Either, State } = Rf
 const { Left, Right, either: fold } = Either
 const { URL } = Url
 
 // =================================================================================================
 module.exports = {
+  Identity,
   Either,
     Left,
     Right,

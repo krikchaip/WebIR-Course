@@ -5,7 +5,7 @@ const { maybe, lengthM } = require('../utils')
 const limitSub = _.lift((n, s) =>
   _.over(_.lensProp('limit'), l => l - n, s))
 
-const statusCode2xxFilter = _.map(_.filter(res =>
+const statusCode2xxFilter = _.lift(_.filter(res =>
   maybe(res.statusCode)
   .map(_.test(/^2\d\d$/))
   .either(() => false, _.identity)))
@@ -22,7 +22,7 @@ const getPages = inst => _.curry((URLsM, sharedM) =>
           inst.removeAllListeners('schedule')
           resolve(shared)
         })
-        fold(_.call, xs => inst.queue(xs), URLs)
+        fold(_.call, xs => inst.queue(xs), URLs) // URLs is Either
         return () => console.error(`error: cancelation not implemented`)
       }))))
 
@@ -32,7 +32,7 @@ module.exports = _.curry((instance, URLs) =>
   .map(statusCode2xxFilter)
   .chain(pagesM =>
     State.modify(limitSub(lengthM(pagesM)))
-    .map(() => pagesM)))
+    .map(() => pagesM))) // Future e [res]
 
 // // test
 // const { Crawler } = require('../dependencies')
