@@ -8,8 +8,8 @@
 //           presumably 'Shared' or 'state.waiting'
 
 const _ = require('ramda')
-const { fold, Future, Crawler, Seenreq } = require('./dependencies')
-const { beautifulLog } = require('./utils')
+const { Either: { either: fold }, Future, Crawler, Seenreq } = require('./dependencies')
+const { beautifulLog, noop } = require('./utils')
 
 // Setup
 const initState = { limit: 10, waiting: [] }
@@ -26,8 +26,8 @@ const instance = new Crawler({
 const scheduler = require('./scheduler')
 const downloader = require('./downloader')(instance)
 const analyzer = require('./analyzer')(visitedDb)
-// const storage = require('./storage')
 
+// chainRec
 const crawler = seed =>
   scheduler(seed)
   .chain(downloader)
@@ -36,7 +36,9 @@ const crawler = seed =>
 
 // Run
 crawler(['https://ecourse.cpe.ku.ac.th/'])
+// crawler(['https://www.ku.ac.th/web2012'])
+// crawler(['http://www.kuappstore.ku.ac.th/index.html'])
   .eval(Future.of(initState))
   .value(beautifulLog)
-  // .exec(Future.of(initState))
-  // .value(beautifulLog)
+  // .eval(Future.of(initState))
+  // .value(_.forEach(fold(noop, beautifulLog)))

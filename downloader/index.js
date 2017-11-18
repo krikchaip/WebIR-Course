@@ -1,5 +1,5 @@
 const _ = require('ramda')
-const { fold, Future, State } = require('../dependencies')
+const { Either: { either: fold }, Future, State } = require('../dependencies')
 const { maybe, lengthM } = require('../utils')
 
 const limitSub = _.lift((n, s) =>
@@ -8,7 +8,7 @@ const limitSub = _.lift((n, s) =>
 const statusCode2xxFilter = _.lift(_.filter(res =>
   maybe(res.statusCode)
   .map(_.test(/^2\d\d$/))
-  .either(() => false, _.identity)))
+  .either(_.F, _.identity)))
 
 const getPages = inst => _.curry((URLsM, sharedM) =>
   URLsM.chain(URLs =>

@@ -1,7 +1,7 @@
 // FIXME: [] constrain taking URLs from the queue(by using fixed number)
 
 const _ = require('ramda')
-const { Left, Right, State, fold } = require('../dependencies')
+const { Left, Right, Either: { either: fold }, State } = require('../dependencies')
 const { lengthM } = require('../utils')
 
 const drop = _.lift((n, s) =>

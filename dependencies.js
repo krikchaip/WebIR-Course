@@ -7,7 +7,7 @@ const Url = require('url')
 
 // =================================================================================================
 const { Identity, Either, State } = Rf
-const { Left, Right, either: fold } = Either
+const { Left, Right } = Either
 const { URL } = Url
 
 // =================================================================================================
@@ -16,7 +16,6 @@ module.exports = {
   Either,
     Left,
     Right,
-    fold,
   State,
   Future,
   Crawler,
