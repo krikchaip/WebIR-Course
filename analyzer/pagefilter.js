@@ -1,17 +1,23 @@
+// TODO: [] optimize 'adsentIn' so that it calculates regex once
+
 const _ = require('ramda')
 const { Either: { either: fold }, Left, Right, Future, URL } = require('../dependencies')
 const { maybe, tryCatch, noop } = require('../utils')
 
-/* Depth: 3 functions */
+/* Depth: 4 functions */
 const currentDir = URL =>
   maybe(URL.pathname)
   .map(_.split('/'))
   .map(_.when(_.pipe(_.last, _.isEmpty), _.dropLast(1)))
   .map(_.last)
 
-/* Depth: 2 functions */
-const absentIn = arr =>
-  _.pipe(_.map(x => !_.contains(x, arr)), fold(_.F, _.identity))
+/* Depth: 3 functions */
+const absentIn = _.curry((xs, M) =>
+  Right(xs)
+  .map(_.join('|'))
+  .map(s => new RegExp(s, 'i'))
+  .chain(re => M.map(x => !_.test(re, x)))
+  .either(_.F, _.identity))
 
 const extension = URL =>
   currentDir(URL)
@@ -22,40 +28,34 @@ const extension = URL =>
         : Left(cdir)
       : Right(''))
 
-/* Depth: 1 functions */
-const contentFilter = _.compose(
-  Future.of,
-  _.map(({ right: { uri, html } }) =>
-    tryCatch(() => new URL(uri))
-    .chain(uri =>
-      extension(uri)
-      .chain(ext =>
-        _.test(/htm|html/, ext)
-          ? Right({ dir: uri.hostname + uri.pathname, html })
-          : Left(noop))))) // Future e [Either noop { dir, html }]
+/* Depth: 2 functions */
+const criteria = exclusions => _.allPass([
+  _.propSatisfies(_.test(/^http(s)?:/), 'protocol'), // is http/https protocol?
+  _.propSatisfies(_.test(/ku\.ac\.th$/), 'hostname'), // is KU domain?
+  _.pipe(extension, absentIn(exclusions)), // isn't file shit?
+])
 
-// // test
-// const pages = [
-//   { right: { uri: 'http://www.kuappstore.ku.ac.th/index.html', html: `<div></div>` } }
-// ]
-// contentFilter(pages).value(console.log)
+/* Depth: 1 functions */
+const $contentFilter = state =>
+  _.compose(
+    Future.of,
+    _.map(({ uri, html }) =>
+      tryCatch(() => new URL(uri))
+      .chain(uri =>
+        extension(uri)
+        .chain(ext => {
+          if(_.test(/htm|html/, ext)) {
+            state.html++
+            return Right({ dir: uri.hostname + uri.pathname, html })
+          } else return Left(noop)
+        }))
+    ))
 
 const urlFilter = exclusions =>
   _.compose(
     Future.of,
-    _.map(({ left: URLs }) =>
-      URLs.filter(
-        _.allPass([
-          _.propSatisfies(_.test(/^http(s)?:/), 'protocol'), // is http/https protocol?
-          _.propSatisfies(_.test(/ku\.ac\.th$/), 'hostname'), // is KU domain?
-          _.pipe(extension, absentIn(exclusions)), // isn't file shit?
-        ])))) // Future e [[URL]]
-
-// // test
-// const pages = [
-//   { left: [new URL('https://www.ku.ac.th/web2012'), new URL('https://ecourse.cpe.ku.ac.th/')] }
-// ]
-// urlFilter(exclusions)(pages).value(console.log)
+    _.map(({ uri, URLs }) =>
+      ({ uri, URLs: _.filter(criteria(exclusions), URLs) })))
 
 /* Root level */
-module.exports = { url: urlFilter, content: contentFilter }
+module.exports = { url: urlFilter, $content: $contentFilter }

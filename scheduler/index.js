@@ -1,39 +1,34 @@
-// FIXME: [] constrain taking URLs from the queue(by using fixed number)
+// TODO: [] put MAX_LIMIT in config file
 
 const _ = require('ramda')
-const { Left, Right, Either: { either: fold }, State } = require('../dependencies')
-const { lengthM } = require('../utils')
+const { Left, Right, Future } = require('../dependencies')
 
-const drop = _.lift((n, s) =>
-  _.over(_.lensProp('waiting'), _.drop(n), s))
+const MAX_LIMIT = 100
 
-const lengthOf = _.lift(_.pipe(lengthM, fold(_.always(0), _.identity)))
+const finishMsg = data => '\n' +
+  '================================================================================\n' +
+  '############################## @ CRAWLER ENDED @ ###############################\n' +
+  '================================================================================\n' +
+  data.join('\n') + '\n' +
+  '================================================================================'
 
-const onfinished = data => () =>
-  console.log(
-    '================================================================================\n' +
-    '############################## @ CRAWLER ENDED @ ###############################\n' +
-    '================================================================================\n' +
-    data.join('\n') + '\n' +
-    '================================================================================')
+const trim = n => n >= MAX_LIMIT ? MAX_LIMIT : n
 
-const enqueue = q =>
-  _.lift(_.over(_.lensProp('waiting'), w => _.concat(w, q)))
+const $take = _.curry((n, s) => {
+  result = _.take(n, s.waiting)
+  s.waiting = _.drop(n, s.waiting)
+  return Future.of(result)
+})
 
-module.exports = URLs =>
-  State.modify(enqueue(URLs))
-  .chain(() =>
-    State.gets(_.lift(s =>
-      s.limit > 0
-        ? Right(_.take(s.limit, s.waiting)) // exponential memory usage!!
-        : Left(onfinished([`@in-queue: ${s.waiting.length}`])))))
-  .chain(nextURLs =>
-    State.modify(drop(lengthOf(nextURLs)))
-    .map(() => nextURLs)) // Future e (Either [String log] [String url])
+const $enqueue = _.curry((q, s) =>
+  (s.waiting = _.concat(s.waiting, q), Future.of(s)))
 
-// // test
-// const { Future } = require('../dependencies')
-// module.exports(['https://ecourse.cpe.ku.ac.th/'])
-//   // .exec(Future.of({ limit: 0, waiting: [] }))
-//   .eval(Future.of({ limit: 1, waiting: [] }))
-//   .fork(console.log, fold(_.call, console.log))
+module.exports = _.curry((state, URLs) =>
+  Future.of(state)
+  .chain($enqueue(URLs))
+  .chain(s => s.limit > 0
+    ? $take(trim(s.limit), s).map(Right)
+    : Future.of(Left(finishMsg([
+        `@in-queue: ${s.waiting.length}`,
+        `@total-HTML: ${s.html}`,
+      ])))))

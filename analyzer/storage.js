@@ -1,9 +1,8 @@
 const _ = require('ramda')
 const { Either: { either: fold, isRight },
-        Right,
         Future,
         FsPath } = require('../dependencies')
-const { noop, sequenceF } = require('../utils')
+const { noop, sequence } = require('../utils')
 
 const writeFile = Future.encaseN2(FsPath.writeFile)
 
@@ -17,9 +16,5 @@ module.exports = folderPath =>
       noop,
       ({ dir, html }) =>
         writeFile(fillUpSlash(folderPath) + dir, html)
-        .map(() => `${dir} written`))),
-    sequenceF)
-
-// // test
-// const content = [Right({ dir: 'win.yedd/test.html', html: `<div></div>` })]
-// module.exports('./html2')(content).value(_.call)
+        .map(() => `@HTML: "${dir}" written`))),
+    sequence)
