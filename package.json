@@ -14,7 +14,8 @@
   "devDependencies": {},
   "scripts": {
     "test": "rm -rf html robots_txt_list && node .index > log",
-    "start": "rm -rf html robots_txt_list && node .index"
+    "start": "rm -rf html robots_txt_list && node .index",
+    "fp": "rm -rf html && node index"
   },
   "repository": {
     "type": "git",
