@@ -5,6 +5,7 @@
   "description": "01204453 Course From Kasetsart University",
   "main": "index.js",
   "dependencies": {
+    "cheerio": "^1.0.0-rc.2",
     "fluture": "^7.2.2",
     "ramda": "^0.24.1",
     "ramda-fantasy": "^0.8.0",
