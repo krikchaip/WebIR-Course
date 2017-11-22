@@ -6,3 +6,5 @@ robots_txt_list/
 **/.DS_Store
 **/package-lock.json
 **/log
+**/urlmap.txt
+**/webgraph.txt

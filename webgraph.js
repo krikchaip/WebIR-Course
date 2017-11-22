@@ -63,8 +63,15 @@ const findEdges = (url, $, result = []) => (
   { url, edges: _.uniq(result) }
 )
 
+const scopeEdges = arr =>
+  Future.of(_.pluck('url', arr))
+  .map(urls =>
+    _.evolve({ edges: _.intersection(urls) }))
+  .map(scope => arr.map(scope))
+
 readStdinSync
 .chain(urlmap)
 .map(_.take(10))
 .chain(path2Edges)
+.chain(scopeEdges)
 .fork(console.error, console.log)
