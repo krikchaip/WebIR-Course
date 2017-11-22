@@ -1,17 +1,13 @@
-/* source: https://gist.github.com/kristopherjohnson/5065599 */
-// let { stdin, stdout } = process,
-//     inputChunks = []
-
-// stdin.setEncoding('utf8')
-// stdin.on('data', chunk => inputChunks.push(chunk))
-// stdin.on('end', () => stdout.write(inputChunks.join('')))
-
 const _ = require('ramda')
 const { Either } = require('ramda-fantasy')
 const Future = require('fluture')
 const cheerio = require('cheerio')
 const fs = require('fs')
 const { URL } = require('url')
+const { inspect } = require('util')
+
+const arrayLog = arr =>
+  console.log(inspect(arr, { breakLength: 100, maxArrayLength: null }))
 
 const fromNullable = _.ifElse(_.isNil, Either.Left, Either.Right)
 
@@ -22,6 +18,7 @@ const tryCatch =
 const readHTMLfile = path =>
   Future.encaseN2(fs.readFile)(path, 'utf8')
 
+/* source: https://gist.github.com/kristopherjohnson/5065599 */
 const readStdinSync =
   Future.node(done => {
     const inputChunks = []
@@ -63,15 +60,25 @@ const findEdges = (url, $, result = []) => (
   { url, edges: _.uniq(result) }
 )
 
+const addIndex = arr =>
+  arr.map(({ url, edges }, index) =>
+    ({ index, url, edges }))
+
 const scopeEdges = arr =>
   Future.of(_.pluck('url', arr))
-  .map(urls =>
-    _.evolve({ edges: _.intersection(urls) }))
+  .map(urls => _.evolve({ edges: scope2IndexWith(urls) }))
   .map(scope => arr.map(scope))
+
+const scope2IndexWith = scope => xs =>
+  _.intersection(xs, scope)
+  .map(x => _.indexOf(x, scope))
+  // .map(x => ({ to: _.indexOf(x, scope), url: x }))
 
 readStdinSync
 .chain(urlmap)
-.map(_.take(10))
+// .map(_.take(100))
 .chain(path2Edges)
+// .map(addIndex)
 .chain(scopeEdges)
-.fork(console.error, console.log)
+.map(_.pluck('edges'))
+.fork(console.error, arrayLog)
