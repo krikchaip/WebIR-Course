@@ -1,7 +1,0 @@
-| Number |                        Description                        |
-| ------ | --------------------------------------------------------- |
-| 1      | No loose currying (use a1 => a2 => ... => result instead) |
-| ------ | --------------------------------------------------------- |
-| 2      | State transformer must receives only state as an argument |
-|        | (and return only state)                                   |
-| ------ | --------------------------------------------------------- |
