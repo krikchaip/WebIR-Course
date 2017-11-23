@@ -7,7 +7,7 @@ const { URL } = require('url')
 const { inspect } = require('util')
 
 const arrayLog = arr =>
-  console.log(inspect(arr, { breakLength: 100, maxArrayLength: null }))
+  console.log(inspect(arr, { breakLength: 10000, maxArrayLength: null }))
 
 const fromNullable = _.ifElse(_.isNil, Either.Left, Either.Right)
 
