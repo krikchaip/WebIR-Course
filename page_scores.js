@@ -5,7 +5,7 @@ const { inspect } = require('util')
 const { BigNumber } = require('bignumber.js')
 
 const arrayLog = arr =>
-  console.log(inspect(arr, { breakLength: 10000, maxArrayLength: null }))
+  console.log(inspect(arr, { breakLength: 1000000, maxArrayLength: null }))
 
 const fromNullable = _.ifElse(_.isNil, Either.Left, Either.Right)
 
@@ -40,17 +40,28 @@ const rowStochastic = matrix =>
     _.isEmpty(row)
       ? zeros.fill(divide(1, matrix.length))
       : row.forEach(n => zeros[n] = divide(1, row.length)),
-    zeros // return mutated result
+    zeros // result
   ))
 
 const divide = (dvd, dvs, fixed = 15) =>
   Number(new BigNumber(dvd)
         .dividedBy(dvs)
-        .toNumber()
         .toFixed(fixed))
+
+const randomSurferWeight = alpha => matrix =>
+  matrix.map(row =>
+    row.map(col => (
+      a = new BigNumber(alpha),
+      ia = a.negated().plus(1),
+      newP = a.mul(col)
+      .plus(ia.mul(divide(1, matrix.length)))
+      .toFixed(15),
+      Number(newP) // result
+    )))
 
 readStdinSync
 .chain(webgraph)
 // .map(_.take(100))
 .map(rowStochastic)
+.map(randomSurferWeight(0.85))
 .fork(console.error, arrayLog)
