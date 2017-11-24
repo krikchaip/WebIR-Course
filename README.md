@@ -3,6 +3,7 @@
 
 ## Installation
     git clone --branch Reranking https://github.com/krikchaip/WebIR-Course.git
+    npm install
 
 ## urlmap.txt
     node urlmap [...html folder's path from crawler project] > urlmap.txt
