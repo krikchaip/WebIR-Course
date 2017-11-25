@@ -76,9 +76,9 @@ const pageRank = iteration => matrix => {
 const stochastic = n =>
   _.repeat(divide(1, n), n)
 
-const discreteNorm = matrix =>
-  _.flatten(matrix).reduce((acc, x) =>
-    Math.abs(acc) + Math.abs(x), 0)
+// const discreteNorm = matrix =>
+//   _.flatten(matrix).reduce((acc, x) =>
+//     Math.abs(acc) + Math.abs(x), 0)
 
 readStdinSync
 .chain(webgraph)

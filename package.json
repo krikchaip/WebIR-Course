@@ -7,7 +7,9 @@
   "dependencies": {
     "bignumber.js": "^4.1.0",
     "cheerio": "^1.0.0-rc.2",
+    "elasticlunr": "^0.9.5",
     "fluture": "^7.2.2",
+    "lunr-languages": "git+https://github.com/MihaiValentin/lunr-languages.git",
     "ramda": "^0.24.1",
     "ramda-fantasy": "^0.8.0",
     "vectorious": "^4.8.1",
