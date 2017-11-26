@@ -13,3 +13,8 @@
 
 ## page_scores.txt
     node page_scores < webgraph.txt > page_scores.txt
+
+or...
+
+## Build documents data
+    node documents [...html folder's path from crawler project]
