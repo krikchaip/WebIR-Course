@@ -3,3 +3,7 @@
 
 ## Installation
     git clone --branch Interfacing https://github.com/krikchaip/WebIR-Course.git
+    npm install
+
+## Start search engine server
+    npm start

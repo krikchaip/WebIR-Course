@@ -5,13 +5,19 @@
   "description": "01204453 Course From Kasetsart University",
   "main": "index.js",
   "dependencies": {
-    "crawler": "^1.0.5",
+    "cheerio": "^1.0.0-rc.2",
+    "fluture": "^7.2.2",
+    "lunr": "^2.1.4",
+    "lunr-languages": "git+https://github.com/MihaiValentin/lunr-languages.git",
     "ramda": "^0.24.1",
-    "ramda-fantasy": "^0.8.0"
+    "ramda-fantasy": "^0.8.0",
+    "vectorious": "^4.8.1",
+    "walk-sync": "^0.3.2"
   },
   "devDependencies": {},
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "echo \"Surprise!!! ... nothing have done yet :(\""
   },
   "repository": {
     "type": "git",
