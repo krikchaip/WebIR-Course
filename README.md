@@ -16,5 +16,8 @@
 
 or...
 
-## Build documents data
+## 1.Build documents data
     node documents [...html folder's path from crawler project]
+
+## 2.Build indexes
+    node indexfiles

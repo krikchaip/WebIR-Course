@@ -10,3 +10,6 @@ robots_txt_list/
 **/urlmap.txt
 **/webgraph.txt
 **/page_scores.txt
+**/rules
+**/documents.json
+**/indexfiles.json
