@@ -6,7 +6,7 @@ const search = require('./search/searchfiles')
 const server = Express()
 
 server.use(BodyParser.urlencoded({ extended: false }))
-server.use(Express.static(Path.join(__dirname, 'frontend')))
+server.use(Express.static(Path.join(__dirname, 'public')))
 server.get('/', (req, res) => res.sendFile('index.html'))
 server.get('/search', (req, res) => (
   result =

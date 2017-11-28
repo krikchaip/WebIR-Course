@@ -5,19 +5,22 @@
   "description": "01204453 Course From Kasetsart University",
   "main": "index.js",
   "dependencies": {
-    "cheerio": "^1.0.0-rc.2",
+    "body-parser": "~1.18.2",
+    "express": "~4.15.5",
     "fluture": "^7.2.2",
     "lunr": "^2.1.4",
-    "lunr-languages": "git+https://github.com/MihaiValentin/lunr-languages.git",
     "ramda": "^0.24.1",
-    "ramda-fantasy": "^0.8.0",
-    "vectorious": "^4.8.1",
-    "walk-sync": "^0.3.2",
-    "body-parser": "~1.18.2",
-    "express": "~4.15.5"
+    "ramda-fantasy": "^0.8.0"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "babel-core": "^6.26.0",
+    "babel-loader": "^7.1.2",
+    "babel-preset-env": "^1.6.1",
+    "webpack": "^3.8.1"
+  },
   "scripts": {
+    "watch": "webpack --progress -p --watch",
+    "build": "webpack --progress -p",
     "start": "node server"
   },
   "repository": {
