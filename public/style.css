@@ -1,0 +1,60 @@
+* {
+  font-family: 'Kanit', sans-serif;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+.container {
+  width: 50%;
+  margin: 0 auto;
+}
+
+.range {
+  font-weight: 300;
+  font-style: italic;
+  margin-bottom: 1em;
+}
+
+.search-field {
+  position: relative;
+}
+
+h1 {
+  font-size: 5em;
+  text-align: center;
+}
+
+input[type='text'] {
+  display: block;
+  width: 90%;
+  padding: 0.5em 0.75em;
+  font-size: 1em;
+  font-weight: 300;
+  margin: 0 auto;
+  transition: 0.3s;
+  border: 2px solid #ccc;
+}
+
+input[type='text']:focus {
+  outline: none;
+  border: 2px solid #888;
+}
+
+button {
+  position: absolute;
+  right: 3.5em;
+  top: 0.5em;
+  border: none;
+  background: #ededed;
+  border-radius: 3px;
+  padding: 0.75em;
+  transition: all .2s;
+  outline: none;
+}  
+
+button:hover {
+  background-color: #37C88D;
+  color: #fff;
+  cursor: pointer;
+}

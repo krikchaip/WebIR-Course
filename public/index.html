@@ -4,10 +4,26 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <link href="https://fonts.googleapis.com/css?family=Kanit:300,300i,400&amp;subset=thai" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
-  <title>Search KU-KU</title>
+  <title>KU-KU search</title>
 </head>
 <body>
+  <form class="container" action="/search">
+    <h1>KU-KU search</h1>
+    <div class="container range">
+      Pagerank
+      <input type="range" name="weight" min="0" max="1" step="0.01">
+      Similarity
+    </div>
+    <div class="search-field">
+      <input type="text" name="term" placeholder="Search something">
+      <button type="submit">Search</button>
+    </div>
+  </form>
+  <div class="container">
+    <!-- Search contents -->
+  </div>
   <script src="bundle.js"></script>
 </body>
 </html>
