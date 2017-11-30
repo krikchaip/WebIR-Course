@@ -12,7 +12,7 @@ const docs = require('./documents.json')
 /* Global variables */
 // console.time('index&documents')
 const index = lunr.Index.load(idx)
-const documents = docs.map(_.omit(['url', 'edges']))
+const documents = docs.map(_.omit(['path', 'edges']))
 // console.timeEnd('index&documents')
 
 /* Helper functions */
@@ -24,12 +24,13 @@ const search = (query, s_weight = 1) =>
   .map(_.map(_.omit(['matchData'])))
   .chain(_.traverse(Either.of, indexCheck))
   .map(_.map(({ ref, score }) =>
-    ({ path: documents[ref].path
+    ({ url: documents[ref].url
       ,total_score: pclamp(s_weight) * score +
                     (1 - pclamp(s_weight)) * documents[ref].pr_score
       ,title: documents[ref].title
       ,sample: _.take(200, documents[ref].body) })))
   .map(_.sortBy(_.prop('total_score')))
+  .map(_.reverse)
 
 const indexCheck = ({ ref, score }) =>
   ref == documents[ref].idx
